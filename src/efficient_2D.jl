@@ -149,28 +149,28 @@ function Lor2(x, v, r)
 end
 
 
-"rotation matrix by angle π/2"
+doc"rotation matrix clockwise by angle π/2"
 const ROT = [ 0.0  1.0;
              -1.0  0.0 ]
 
-"reflection matrix; interchanges y->x and x->y"
+doc"reflection matrix; maps (x,y) ↦ (y,x) and x->y"
 const REFL = [ 0.0  1.0;
                1.0  0.0 ]
 
 
-const T = Array(8, Array{Float,2})
-const T_inverse = Array(8, Array{Float,2})
+const T = Array(Matrix{Float64}, 8)
+const T_inverse = Array(Matrix{Float64}, 8)
 
 
-# transformations for octants:
-for i in 0:7
-    if i%2 == 1
-        T[i] = ROT^((n-1)/2)
+# array of transformations for each octant:
+for n in 0:7
+    if n%2 == 1
+        T[n+1] = ROT^((n-1)/2)
     else
-        T[i] = REFL * ROT^(n/2)
+        T[n+1] = REFL * ROT^(n/2)
     end
 
-    T_inverse[i] = inv(T[i])
+    T_inverse[n+1] = inv(T[n+1])
 end
 
 
@@ -182,14 +182,14 @@ function octant(v)
         θ += 2π
     end
 
-    ifloor(theta / (2π) * 8)
+    ifloor(θ / (2π) * 8)
 end
 
 function Lorentz2(x, v, r)
 
     n = octant(v)
 
-    M = T[n]
+    M = T[n+1]
 
     x = M * x
     v = M * v
@@ -200,7 +200,7 @@ function Lorentz2(x, v, r)
         return false
     end
 
-    x = T_inverse[n] * x
+    x = T_inverse[n+1] * x
 end
 
 function LorentzGas1(x, v, r, steps)
