@@ -1,10 +1,13 @@
 normsq(x) = dot(x, x)
 
-"Find collision with disc with centre c"
-function collision(x1, c, r, v)
-    v2 = dot(v,v)
-    b = dot((x1 - c), v) / v2
-    c = (normsq(x1 - c) - r^2) / v2
+doc"""
+Find collision of particle with disc with centre `c` and radius `r`.
+`x` and `v` are the position and velocity of the particle.
+"""
+function collision(x, c, r, v)
+    v2 = normsq(v)
+    b = ((x - c) ⋅ v) / v2
+    c = (normsq(x - c) - r^2) / v2
     if b^2 - c < 0
         return false, 0
     end
@@ -15,19 +18,27 @@ function collision(x1, c, r, v)
 
 end
 
-function velo_col(x1, c, v)
-    n = x1 - c
+doc"""
+Calculate the post-collision velocity at the point `x` on a disc of radius
+`c`. The pre-collision velocity is `v`.
+"""
+function velo_col(x, c, v)
+    n = x - c
     n /= norm(n)
 
-    v -= 2*(n⋅v)*n
+    v -= 2(v⋅n) * n
     v /= norm(v)
     v
 end
 
+doc"""Continued fraction algorithm: find a rational approximation $p/q$
+which is within a distance `ϵ` of `x`.
+"""
 function frac(x, ϵ)
    h1, h2 = 1, 0
    k1, k2 = 0, 1
    b = x
+
    while abs(k1*x - h1) > ϵ
        a = ifloor(b)
        h1, h2 = a*h1 + h2, h1
@@ -37,6 +48,7 @@ function frac(x, ϵ)
    return k1, h1
 end
 
+
 function nextt1(x,v,r)
     e1 = [1,0]
     e2 = [0,1]
@@ -44,37 +56,37 @@ function nextt1(x,v,r)
     nn = ifloor(x)
     xx = x-nn
     t = (1 - xx[1]) / v[1]
-    t2 = -xx[1]/v[1]
-    x1 = xx + v*t
-    x2 = xx + v*t2
+    t2 = -xx[1] / v[1]
+    x1 = xx + v * t
+    x2 = xx + v * t2
     b1 = x1[2]
     b2 = x2[2]
-    ϵ=r/v[1]
-    testt=0
+    ϵ = r / v[1]
 
-    if( dot(xx-e1,v)<0)
-        if(abs(b1)<ϵ)
+    if (xx-e1)⋅v < 0
+        if abs(b1) < ϵ
             return e1+nn, 0
         end
     end
-    if( dot(xx-e2,v)<0)
-        if(abs(1-b2)<ϵ)
+
+    if (xx-e2)⋅v < 0
+        if abs(1-b2) <ϵ
             return e2+nn, 0
         end
     end
 
-    if( dot(xx-e1-e2,v)<0)
-        if(abs(1-b1)<ϵ)
+    if (xx-e1-e2)⋅v < 0
+        if abs(1-b1) < ϵ
             return e1+e2+nn, 0
         end
     end
-    if( dot(xx-e1-e2-e2,v)<0)
-        if(abs(2-b1)<ϵ)
+    if (xx-e1-2*e2) ⋅ v < 0
+        if abs(2-b1) < ϵ
             return e1+e2+e2+nn, 0
         end
     end
-    testt=1
-    return x1+nn, testt
+
+    return x1+nn, 1
 end
 
 function eff2(m, b, r)
@@ -82,11 +94,11 @@ function eff2(m, b, r)
     b1 = copy(b)
     ϵ = r*sqrt(m*m+1)
 
-    if(b < ϵ || 1 - b < ϵ)
+    if b < ϵ || 1 - b < ϵ
         if b < 0.5
-			(q, p) = frac(m, 2.*b)
+			(q, p) = frac(m, 2b)
 		else
-			(q, p) = frac(m, 2.*(1. - b))
+			(q, p) = frac(m, 2*(1 - b))
 		end
 		b = mod(m*q + b, 1)
 		kn += q
@@ -94,13 +106,13 @@ function eff2(m, b, r)
 
 	while b > ϵ && 1 - b > ϵ
 		if b < 0.5
-			(q, p) = frac(m, 2.*b)
+			(q, p) = frac(m, 2b)
 		else
-			(q, p) = frac(m, 2.*(1. - b))
+			(q, p) = frac(m, 2*(1 - b))
 		end
 		b = mod(m*q + b, 1)
 		kn += q
-        if abs(b - b1)< 1e-30
+        if abs(b - b1) < 1e-30
             return false
         end
 	end
@@ -109,7 +121,7 @@ function eff2(m, b, r)
     return [q, p]
 end
 
-"""`Lor2` finds the coordinates of the obstacle with which a particle
+"""Find coordinates of the obstacle with which a particle
 at initial position `x`, with velocity `v`, collides
 if both components of the velocity are positive and the slope is less than 1.
 """
@@ -125,13 +137,14 @@ function Lor2(x, v, r)
     b = x1[2]
     b -= floor(b)
     de=[0, int(b)]
-    centre=eff2(m,b,r)
 
-    if(centre==false)
+    centre = eff2(m,b,r)
+
+    if centre == false
         return false
     end
 
-    x2=int(x1)-de+centre
+    x2 = int(x1) - de + centre
     return x2
 end
 
@@ -141,9 +154,8 @@ const ROT = [ 0  1;
              -1  0 ]
 
 "reflection matrix; interchanges y->x and x->y"
-
-const REFL=[0  1;
-           1  0 ]
+const REFL=[ 0  1;
+             1  0 ]
 
 const ROT2 = ROT^2
 const ROT3 = ROT^3
@@ -151,24 +163,24 @@ const ROT3 = ROT^3
 function Lorentz2(x, v, r)
     v1, v2 = v
 
-    vv=copy(v)
-    xx=copy(x)
-    m1 = v2/v1
+    vv = copy(v)
+    xx = copy(x)
+    m = v2 / v1
 
-    if norm(int(x)-x) < r
+    if norm(int(x) - x) < r
         # if a particle begins inside an obstacle, then the first collision
         # is considered with the same obstacle
         return int(x)
     end
 
-    if m1>=0 && v2>=0  # velocity in  quadrant I
-        if m1 <= 1
+    if m >= 0 && v2 >= 0  # velocity in  quadrant I
+        if m <= 1
             xx = Lor2(xx,vv,r)
-            if xx==false
+            if xx == false
                 return false
             end
 
-        elseif m1 > 1
+        elseif m > 1
             xx = REFL*xx
             vv = REFL*vv
             xx = Lor2(xx,vv,r)
@@ -180,16 +192,16 @@ function Lorentz2(x, v, r)
         end
         return xx
 
-    elseif m1 >= 0 && v2 < 0   #velocity in quadrant III
+    elseif m >= 0 && v2 < 0   #velocity in quadrant III
         xx = ROT2*xx
         vv = ROT2*vv
-        if m1<=1
+        if m<=1
             xx = Lor2(xx,vv,r)
             if xx == false
                 return false
             end
 
-        elseif m1 > 1
+        elseif m > 1
             xx = REFL*xx
             vv = REFL*vv
             xx = Lor2(xx,vv,r)
@@ -203,15 +215,15 @@ function Lorentz2(x, v, r)
         vv = ROT2*vv
         return xx
 
-    elseif m1<0 && v2>=0 # velocity in quadrant II
+    elseif m<0 && v2>=0 # velocity in quadrant II
         xx = ROT*xx
         vv = ROT*vv
-        if m1 < -1
+        if m < -1
             xx = Lor2(xx,vv,r)
             if xx == false
                 return false
             end
-        elseif m1 >= -1
+        elseif m >= -1
             xx = REFL*xx
             vv = REFL*vv
             xx = Lor2(xx,vv,r)
@@ -225,16 +237,16 @@ function Lorentz2(x, v, r)
         vv = ROT3*vv
         return xx
 
-    elseif m1<0 && v2<0  # velocity in quadrant IV
+    elseif m<0 && v2<0  # velocity in quadrant IV
         xx = ROT3*xx
         vv = ROT3*vv
-        if m1<-1
+        if m<-1
             xx = Lor2(xx,vv,r)
             if xx == false
                 return false
             end
 
-        elseif m1 >= -1
+        elseif m >= -1
             xx = REFL*xx
             vv = REFL*vv
             xx = Lor2(xx,vv,r)
@@ -252,7 +264,7 @@ end
 
 function LorentzGas1(x, v, r, steps)
 
-    for i=1:steps
+    for i = 1:steps
         center = Lorentz2(x, v, r)
         x, t = collision(x, center, r, v)
         v = velo_col(x, center, v)
@@ -262,10 +274,10 @@ function LorentzGas1(x, v, r, steps)
 end
 
 function LorentzGas2(x, v, r, time)
-    t=0
-    v1=copy(v)
+    t = 0
+    v1 = copy(v)
 
-    while t<time
+    while t < time
         x1 = copy(x)
         v1 = copy(v)
         center = Lorentz2(x, v, r)
@@ -284,25 +296,25 @@ function LorentzGas2(x, v, r, time)
 end
 
 function Lorentz3D2(x, v, r)
-    if norm(int(x)-x) < r   #if a particle begin inside an obstacle, then the first collision
-                          #is considered with the same obstacle.
+    if norm(int(x) - x) < r     # if a particle begin inside an obstacle, then the first collision
+                                # is considered with the same obstacle.
     xx, t = collision(x, int(x), r, v)
         return xx
     end
 
-    x1=zeros(2)
-    x2=zeros(2)
-    x3=zeros(2)
-    xr=false
+    x1 = zeros(2)
+    x2 = zeros(2)
+    x3 = zeros(2)
+    xr = false
 
-    while (xr==false)
+    while (xr == false)
         v_xy = [v[1], v[2]]
         v_xz = [v[1], v[3]]
         v_yz = [v[2], v[3]]                #Velocities in the planes xy, xz, and yz
 
-        vn_xy = v_xy./norm(v_xy)
-        vn_xz = v_xz./norm(v_xz)
-        vn_yz = v_yz./norm(v_yz,v_yz) #normalized velocities in the planes xy, xz, and yz
+        vn_xy = v_xy ./ norm(v_xy)
+        vn_xz = v_xz ./ norm(v_xz)
+        vn_yz = v_yz ./ norm(v_yz) #normalized velocities in the planes xy, xz, and yz
 
         tmax = 0
         tmin = -2
@@ -314,10 +326,10 @@ function Lorentz3D2(x, v, r)
         x3[2] = 6
         #        while (int(tmax)>int(tmin+BigFloat("0.5")) )   #it can be considerin time conincidence
 
-        while x1[1]!=x2[1] || x1[2]!=x3[1] || x2[2]!=x3[2]    #or considering the obstacle coincidence.
-            x_xy=[x[1], x[2]]
-            x_xz=[x[1], x[3]]
-            x_yz=[x[2], x[3]]                #positions in the planes xy, xz, and yz
+        while x1[1] != x2[1] || x1[2] != x3[1] || x2[2] != x3[2]    #or considering the obstacle coincidence.
+            x_xy = [x[1], x[2]]
+            x_xz = [x[1], x[3]]
+            x_yz = [x[2], x[3]]                #positions in the planes xy, xz, and yz
 
             x1 = Lorentz2(x_xy, vn_xy, r)#calculate the position of obstacle that collide with the particle
             if x1 == false
@@ -335,46 +347,47 @@ function Lorentz3D2(x, v, r)
             end
 
             # calculate the time needed to reach the obstacle in each plane:
-            t1 = (norm(x1-x_xy)-r) / norm(v_xy)
-            t2 = (norm(x2-x_xz)-r) / norm(v_xz)
-            t3 = (norm(x3-x_yz)-r) / norm(v_yz)
+            t1 = (norm(x1 - x_xy) - r) / norm(v_xy)
+            t2 = (norm(x2 - x_xz) - r) / norm(v_xz)
+            t3 = (norm(x3 - x_yz) - r) / norm(v_yz)
 
             tmax = max(t1, t2, t3)    # if the minumum and maximum valueds of time are almost the same, then
             tmin = min(t1, t2, t3)    # there is very high probable a collision
-            if(tmax < 0)
-                tmax = 0.1*r
+            if tmax < 0
+                tmax = 0.1 * r
             end
-            x += v*(tmax-0.1*r)
+            x += v * (tmax - 0.1*r)
         end
+
         xr, tt = collision(x, int(x), r, v) #calculates the collision. In case that there is not, then, it advance the particle to the
                                    #next cell
         if tt<0
             xr=false
         end
-        x += v*(1-2*r)
+        x += v * (1 - 2*r)
     end
     return xr
 end
 
-function ClassicLorentz(x,v,r)    #This is a simpler and inefficient version of the Classic algorithm for ND. Just to
+function ClassicLorentz(x, v, r)    #This is a simpler and inefficient version of the Classic algorithm for ND. Just to
                                   #check if the 3D version works correctly.
-   if(norm(int(x)-x)<r)   #if a particle begin inside an obstacle, then the first collision
+   if norm(int(x) - x) < r    #if a particle begin inside an obstacle, then the first collision
                           #is considered with the same obstacle.
-        xx,tt = collision(x,int(x),r,v)
+        xx,tt = collision(x, int(x), r, v)
         return xx
     end
-    xr=false
-    i=0.0
+    xr = false
+    i = 0.0
 
     while xr == false
         while xr == false
-            xr, tt = collision(x,int(x+v*(i)),r,v)
-            i += 1-2*r
+            xr, tt = collision(x, int(x+v*(i)), r, v)
+            i += 1 - 2*r
         end
 
-        t = norm(xr-x) / normsq(v)
-        if normsq(x+t*v-xr) > normsq(xr - x)
-            xr=false
+        t = norm(xr - x) / normsq(v)
+        if normsq(x + t*v - xr) > normsq(xr - x)
+            xr = false
         end
     end
 
