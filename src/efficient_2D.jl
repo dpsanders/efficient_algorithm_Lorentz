@@ -1,40 +1,11 @@
 normsq(x) = dot(x, x)
 
-doc"""
-Find collision of particle with disc with centre `c` and radius `r`.
-`x` and `v` are the position and velocity of the particle.
-"""
-function collision(x, c, r, v)
-    v2 = normsq(v)
-    b = ((x - c) ⋅ v) / v2
-    c = (normsq(x - c) - r^2) / v2
-    if b^2 - c < 0  # no collision
-        return false, 0
-    end
 
-    t = -b - √(b^2 - c)  # collision time
-    x = v*t + x1
-    return x, t
-
-end
-
-doc"""
-Calculate the post-collision velocity at the point `x` on a disc of radius
-`c`. The pre-collision velocity is `v`.
-"""
-function velo_col(x, c, v)
-    n = x - c
-    n /= norm(n)
-
-    v -= 2(v⋅n) * n
-    v /= norm(v)
-    v
-end
 
 doc"""Continued fraction algorithm: find a rational approximation $p/q$
-which is within a distance `ϵ` of `x`.
+to $x$ which is within a distance $\epsilon$ of $x$.
 """
-function frac(x, ϵ)
+function rational_approximation(x, ϵ)
    h1, h2 = 1, 0
    k1, k2 = 0, 1
    b = x
@@ -48,8 +19,12 @@ function frac(x, ϵ)
    return k1, h1
 end
 
-
-function next(x, v, r)
+doc"""
+Find a collision of a particle with position `x` and velocity `v` with a local disc of radius $r$; if there is no such
+collision with a nearby disc, find the nearest position of the form $(n, b)$ with $n$ an integer.
+Supposes that v is in the first octant.
+"""
+function local_step(x, v, r)
     e1 = [1, 0]
     e2 = [0, 1]
 
@@ -62,13 +37,13 @@ function next(x, v, r)
     t2 = -xx[1] / v[1]  # collision time with previous vertical wall
     x2 = xx + v * t2
 
-    y1 = x1[2]  # collision heights
-    y2 = x2[2]
+    b1 = x1[2]  # collision heights
+    b2 = x2[2]
 
     ϵ = r / v[1]
 
     if (xx - e1)⋅v < 0
-        if abs(y1) < ϵ
+        if abs(b1) < ϵ
             return e1 + nn, 0
         end
     end
@@ -93,16 +68,20 @@ function next(x, v, r)
     return x1+nn, 1
 end
 
-function eff(m, b, r)
+doc"""
+Efficiently calculate with which disc of radius $r$ a trajectory will collide.
+The trajectory is a line through the point $(0, b)$ with slope $m$.
+"""
+function efficient_disc_collision(m, b, r)
 	kn = 0
     b1 = b
     ϵ = r * √(m^2 + 1)
 
     if b < ϵ || 1 - b < ϵ
         if b < 0.5
-			q, p = frac(m, 2b)
+			q, p = rational_approximation(m, 2b)
 		else
-			q, p = frac(m, 2*(1 - b))
+			q, p = rational_approximation(m, 2*(1 - b))
 		end
 
 		b = mod(m*q + b, 1)
@@ -111,50 +90,55 @@ function eff(m, b, r)
 
 	while b > ϵ && 1 - b > ϵ
 		if b < 0.5
-			(q, p) = frac(m, 2b)
+			(q, p) = rational_approximation(m, 2b)
 		else
-			(q, p) = frac(m, 2*(1 - b))
+			(q, p) = rational_approximation(m, 2*(1 - b))
 		end
 		b = mod(m*q + b, 1)
 		kn += q
         if abs(b - b1) < 1e-30
-            throw(ArgumentError("Rational velocity along a channel: no collision"))
+            throw(ArgumentError("Rational velocity along channel with slope $m; no collision"))
         end
 	end
 	q = kn
-    p = int(m*q+b1)
+    p = round(m*q + b1)
     return [q, p]
 end
 
 """Find coordinates of the obstacle with which a particle
 at initial position `x`, with velocity `v`, collides
-if both components of the velocity are positive and the slope is less than 1.
+if both components of the velocity are positive and the slope is less than 1,
+    i.e. if the velocity vector lies within the first octant.
 """
-function Lor2(x, v, r)
-    x1, test = nextt1(x,v,r)
-    if test==0
+function find_next_disc_first_octant(x, v, r)
+    if normsq(round(x) - x) < r^2   # if inside obstacle
+        return round(x)             # then first collision is with that obstacle
+    end                             # (used for the 3D algorithm)
+
+    x1, collided = local_step(x, v, r)
+    if collided == 0  # hit local disc
         return x1
     end
 
     v1, v2 = v
     m = v2 / v1
     b = x1[2]
-    b -= floor(b)
+    b -= floor(b)   # move to form $(0, b)$
 
-    centre = eff2(m,b,r)
+    centre = efficient_disc_collision(m, b, r)
 
-    d = [0, int(b)]
-    x2 = int(x1) - d + centre
+    d = [0, round(b)]
+    x2 = round(x1) - d + centre
     return x2
 end
 
 
 doc"rotation matrix clockwise by angle π/2"
-const ROT = [ 0.0  1.0;
+const Rot = [ 0.0  1.0;
              -1.0  0.0 ]
 
-doc"reflection matrix; maps (x,y) ↦ (y,x) and x->y"
-const REFL = [ 0.0  1.0;
+doc"reflection matrix; maps (x,y) ↦ (y,x)"
+const Refl = [ 0.0  1.0;
                1.0  0.0 ]
 
 
@@ -162,16 +146,21 @@ const T = Array(Matrix{Float64}, 8)
 const T_inverse = Array(Matrix{Float64}, 8)
 
 
-# array of transformations for each octant:
-for n in 0:7
-    if n%2 == 1
-        T[n+1] = ROT^((n-1)/2)
-    else
-        T[n+1] = REFL * ROT^(n/2)
-    end
+function initialise_transformations()
+    for n in 1:8   # octant between 1 and 8
 
-    T_inverse[n+1] = inv(T[n+1])
+        quadrant = (n-1) ÷ 2  # integer division; quadrant between 0 and 3
+        T[n] = Rot^quadrant
+
+        if n%2 == 0
+            T[n] = Refl * T[n]
+        end
+
+        T_inverse[n] = inv(T[n])
+    end
 end
+
+initialise_transformations()
 
 
 function octant(v)
@@ -182,33 +171,61 @@ function octant(v)
         θ += 2π
     end
 
-    ifloor(θ / (2π) * 8)
+    iceil(θ / (2π) * 8)  # from 1 to 8
 end
 
-function Lorentz2(x, v, r)
+
+function find_next_disc(x, v, r)
 
     n = octant(v)
 
-    M = T[n+1]
+    M = T[n]
 
     x = M * x
     v = M * v
 
-    x = Lor2(x, v, r)
+    x = find_next_disc_first_octant(x, v, r)
 
-    if x == false
-        return false
-    end
-
-    x = T_inverse[n+1] * x
+    x = T_inverse[n] * x
 end
 
-function LorentzGas1(x, v, r, steps)
+doc"""
+Find collision of particle with disc with centre `c` and radius `r`.
+`x` and `v` are the position and velocity of the particle.
+"""
+function collision(x, c, r, v)
+    v2 = normsq(v)
+    b = ((x - c) ⋅ v) / v2
+    c = (normsq(x - c) - r^2) / v2
+    if b^2 - c < 0
+        return x, +Inf   # no collision
+    end
+
+    t = -b - √(b^2 - c)  # collision time
+    x = v*t + x
+    return x, t
+
+end
+
+doc"""
+Calculate the post-collision velocity at the point `x` on a disc of radius
+`c`. The pre-collision velocity is `v`.
+"""
+function post_collision_velocity(x, c, v)
+    n = x - c
+    n /= norm(n)
+
+    v -= 2(v⋅n) * n
+    v /= norm(v)
+    v
+end
+
+function LorentzGas(x, v, r, steps)
 
     for i = 1:steps
-        center = Lorentz2(x, v, r)
+        center = find_next_disc(x, v, r)
         x, t = collision(x, center, r, v)
-        v = velo_col(x, center, v)
+        v = post_collision_velocity(x, center, v)
     end
 
     x, v
@@ -221,9 +238,9 @@ function LorentzGas2(x, v, r, time)
     while t < time
         x1 = copy(x)
         v1 = copy(v)
-        center = Lorentz2(x, v, r)
+        center = find_next_disc(x, v, r)
         x, tt = collision(x, center, r, v)
-        v = velo_col(x, center, v)
+        v = post_collision_velocity(x, center, v)
         t += tt # norm(x-x1)
     end
 
